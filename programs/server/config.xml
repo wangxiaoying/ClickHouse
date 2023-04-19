@@ -205,7 +205,7 @@
          - users without password have readonly access.
          See also: https://www.shodan.io/search?query=clickhouse
       -->
-    <!-- <listen_host>::</listen_host> -->
+    <listen_host>::</listen_host>
 
 
     <!-- Same for hosts without support for IPv6: -->
@@ -608,11 +608,11 @@
     <user_directories>
         <users_xml>
             <!-- Path to configuration file with predefined users. -->
-            <path>users.xml</path>
+            <path>/root/ClickHouse/programs/server/users.xml</path>
         </users_xml>
         <local_directory>
             <!-- Path to folder where users created by SQL commands are stored. -->
-            <path>/var/lib/clickhouse/access/</path>
+            <path>/tmp/clickhouse/access/</path>
         </local_directory>
 
         <!-- To add an LDAP server as a remote user directory of users that are not defined locally, define a single 'ldap' section

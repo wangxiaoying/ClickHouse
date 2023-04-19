@@ -67,6 +67,8 @@ void registerTableFunctions()
 
     registerTableFunctionFormat(factory);
     registerTableFunctionExplain(factory);
+
+    registerTableFunctionConnectorX(factory);
 }
 
 }

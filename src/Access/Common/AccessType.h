@@ -200,6 +200,7 @@ enum class AccessType
     M(MEILISEARCH, "", GLOBAL, SOURCES) \
     M(MYSQL, "", GLOBAL, SOURCES) \
     M(POSTGRES, "", GLOBAL, SOURCES) \
+    M(CONNECTORX, "", GLOBAL, SOURCES) \
     M(SQLITE, "", GLOBAL, SOURCES) \
     M(ODBC, "", GLOBAL, SOURCES) \
     M(JDBC, "", GLOBAL, SOURCES) \

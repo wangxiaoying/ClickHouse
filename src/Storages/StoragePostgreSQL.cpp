@@ -37,6 +37,7 @@
 #include <Processors/Sinks/SinkToStorage.h>
 
 #include <QueryPipeline/Pipe.h>
+#include <QueryPipeline/narrowPipe.h>
 
 #include <Storages/StorageFactory.h>
 #include <Storages/transformQueryForExternalDatabase.h>
@@ -61,11 +62,13 @@ StoragePostgreSQL::StoragePostgreSQL(
     const ConstraintsDescription & constraints_,
     const String & comment,
     const String & remote_table_schema_,
-    const String & on_conflict_)
+    const String & on_conflict_,
+    const String & query_)
     : IStorage(table_id_)
     , remote_table_name(remote_table_name_)
     , remote_table_schema(remote_table_schema_)
     , on_conflict(on_conflict_)
+    , remote_query(query_)
     , pool(std::move(pool_))
     , log(&Poco::Logger::get("StoragePostgreSQL (" + table_id_.table_name + ")"))
 {
@@ -84,19 +87,21 @@ Pipe StoragePostgreSQL::read(
     ContextPtr context_,
     QueryProcessingStage::Enum /*processed_stage*/,
     size_t max_block_size_,
-    size_t /*num_streams*/)
+    size_t num_streams)
 {
     storage_snapshot->check(column_names_);
 
     /// Connection is already made to the needed database, so it should not be present in the query;
     /// remote_table_schema is empty if it is not specified, will access only table_name.
-    String query = transformQueryForExternalDatabase(
+    String query = remote_query.empty() ? transformQueryForExternalDatabase(
         query_info_, storage_snapshot->metadata->getColumns().getOrdinary(),
-        IdentifierQuotingStyle::DoubleQuotes, remote_table_schema, remote_table_name, context_);
-    LOG_TRACE(log, "Query: {}", query);
+        IdentifierQuotingStyle::DoubleQuotes, remote_table_schema, remote_table_name, context_) : remote_query;
+    LOG_TRACE(log, "Query to postgres: {}", query);
+
+    Names column_names = remote_query.empty() ? column_names_: storage_snapshot->metadata->getColumns().getNamesOfPhysical();
 
     Block sample_block;
-    for (const String & column_name : column_names_)
+    for (const String & column_name : column_names)
     {
         auto column_data = storage_snapshot->metadata->getColumns().getPhysical(column_name);
         WhichDataType which(column_data.type);
@@ -105,7 +110,34 @@ Pipe StoragePostgreSQL::read(
         sample_block.insert({ column_data.type, column_data.name });
     }
 
-    return Pipe(std::make_shared<PostgreSQLSource<>>(pool->get(), query, sample_block, max_block_size_));
+    if (remote_query.empty()) {
+        return Pipe(std::make_shared<PostgreSQLSource<>>(pool->get(), query, sample_block, max_block_size_));
+    }
+
+    Pipes pipes;
+
+    size_t last_pos = 0;
+    while (true) {
+        size_t pos = query.find(';', last_pos);
+        std::string sql = query.substr(last_pos, pos-last_pos);
+        if (sql.empty()) {
+            break;
+        }
+        
+        pipes.emplace_back(std::make_shared<PostgreSQLSource<>>(pool->get(), sql, sample_block, max_block_size_));
+
+        if (pos == std::string::npos) {
+            break;
+        }
+        last_pos = pos+1;
+    }
+
+    auto pipe = Pipe::unitePipes(std::move(pipes));
+
+    narrowPipe(pipe, num_streams);
+    return pipe;
+
+    // return Pipe(std::make_shared<PostgreSQLSource<>>(pool->get(), query, sample_block, max_block_size_));
 }
 
 
@@ -412,6 +444,7 @@ StoragePostgreSQL::Configuration StoragePostgreSQL::processNamedCollectionResult
         configuration.table = named_collection.get<String>("table");
     configuration.schema = named_collection.getOrDefault<String>("schema", "");
     configuration.on_conflict = named_collection.getOrDefault<String>("on_conflict", "");
+    configuration.query = named_collection.getOrDefault<String>("query", "");
 
     return configuration;
 }
@@ -425,7 +458,7 @@ StoragePostgreSQL::Configuration StoragePostgreSQL::getConfiguration(ASTs engine
     }
     else
     {
-        if (engine_args.size() < 5 || engine_args.size() > 7)
+        if (engine_args.size() < 5 || engine_args.size() > 8)
         {
             throw Exception(
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
@@ -456,6 +489,8 @@ StoragePostgreSQL::Configuration StoragePostgreSQL::getConfiguration(ASTs engine
             configuration.schema = checkAndGetLiteralArgument<String>(engine_args[5], "schema");
         if (engine_args.size() >= 7)
             configuration.on_conflict = checkAndGetLiteralArgument<String>(engine_args[6], "on_conflict");
+        if (engine_args.size() >= 8)
+            configuration.query = checkAndGetLiteralArgument<String>(engine_args[7], "query");
     }
     for (const auto & address : configuration.addresses)
         context->getRemoteHostFilter().checkHostAndPort(address.first, toString(address.second));

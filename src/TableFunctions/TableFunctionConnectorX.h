@@ -1,19 +1,18 @@
 #pragma once
 #include "config.h"
 
-#if USE_LIBPQXX
+
 #include <TableFunctions/ITableFunction.h>
-#include <Core/PostgreSQL/PoolWithFailover.h>
 #include <Storages/ExternalDataSourceConfiguration.h>
-#include <Storages/StoragePostgreSQL.h>
+#include <Storages/StorageConnectorX.h>
 
 namespace DB
 {
 
-class TableFunctionPostgreSQL : public ITableFunction
+class TableFunctionConnectorX : public ITableFunction
 {
 public:
-    static constexpr auto name = "postgresql";
+    static constexpr auto name = "connectorx";
     std::string getName() const override { return name; }
 
 private:
@@ -21,16 +20,14 @@ private:
             const ASTPtr & ast_function, ContextPtr context,
             const std::string & table_name, ColumnsDescription cached_columns) const override;
 
-    const char * getStorageTypeName() const override { return "PostgreSQL"; }
+    const char * getStorageTypeName() const override { return "ConnectorX"; }
 
     ColumnsDescription getActualTableStructure(ContextPtr context) const override;
-    ColumnsDescription getTableSchemaFromConnectorX() const;
     void parseArguments(const ASTPtr & ast_function, ContextPtr context) override;
 
-    postgres::PoolWithFailoverPtr connection_pool;
-    std::optional<StoragePostgreSQL::Configuration> configuration;
+    std::optional<StorageConnectorX::Configuration> configuration;
+    CXIterator *iter;
+    std::shared_ptr<arrow::Schema> schema;
 };
 
 }
-
-#endif
