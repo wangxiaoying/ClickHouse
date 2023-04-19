@@ -532,6 +532,12 @@ if (TARGET ch_contrib::libpqxx)
     dbms_target_link_libraries(PUBLIC ch_contrib::libpqxx)
 endif()
 
+if (TARGET ch_contrib::connectorx)
+    message(STATUS "linking ch_contrib::connectorx")
+    dbms_target_include_directories(PRIVATE $<TARGET_PROPERTY:ch_contrib::connectorx,INTERFACE_INCLUDE_DIRECTORIES>)
+    dbms_target_link_libraries(PUBLIC ch_contrib::connectorx)
+endif()
+
 if (TARGET ch_contrib::datasketches)
     target_link_libraries (clickhouse_aggregate_functions PRIVATE ch_contrib::datasketches)
 endif ()

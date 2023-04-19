@@ -7,6 +7,12 @@
 #include <Storages/ExternalDataSourceConfiguration.h>
 #include <Storages/StoragePostgreSQL.h>
 
+#define REQUIRE(V) assert(V)
+
+#define REQUIRE_RESULT(OUT, IN)                                                                                        \
+	REQUIRE(IN.ok());                                                                                                  \
+	OUT = IN.ValueUnsafe()
+
 
 namespace DB
 {
@@ -25,6 +31,7 @@ private:
     const char * getStorageTypeName() const override { return "PostgreSQL"; }
 
     ColumnsDescription getActualTableStructure(ContextPtr context) const override;
+    ColumnsDescription getTableSchemaFromConnectorX() const;
     void parseArguments(const ASTPtr & ast_function, ContextPtr context) override;
 
     postgres::PoolWithFailoverPtr connection_pool;

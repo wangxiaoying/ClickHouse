@@ -32,7 +32,8 @@ public:
         const ConstraintsDescription & constraints_,
         const String & comment,
         const String & remote_table_schema_ = "",
-        const String & on_conflict = "");
+        const String & on_conflict = "",
+        const String & query_ = "");
 
     String getName() const override { return "PostgreSQL"; }
 
@@ -57,6 +58,7 @@ public:
         String table;
         String schema;
         String on_conflict;
+        String query;
 
         std::vector<std::pair<String, UInt16>> addresses; /// Failover replicas.
         String addresses_expr;
@@ -70,6 +72,7 @@ private:
     String remote_table_name;
     String remote_table_schema;
     String on_conflict;
+    String remote_query;
     postgres::PoolWithFailoverPtr pool;
 
     Poco::Logger * log;

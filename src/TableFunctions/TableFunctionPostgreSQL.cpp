@@ -11,6 +11,11 @@
 #include "registerTableFunctions.h"
 #include <Common/parseRemoteDescription.h>
 
+#include <Processors/Formats/Impl/ArrowColumnToCHColumn.h>
+#include <arrow/api.h>
+#include <arrow/c/bridge.h>
+#include "connectorx_lib.hpp"
+
 
 namespace DB
 {
@@ -24,7 +29,7 @@ namespace ErrorCodes
 StoragePtr TableFunctionPostgreSQL::executeImpl(const ASTPtr & /*ast_function*/,
         ContextPtr context, const std::string & table_name, ColumnsDescription /*cached_columns*/) const
 {
-    auto columns = getActualTableStructure(context);
+    auto columns = configuration->query.size() > 0 ? getTableSchemaFromConnectorX() : getActualTableStructure(context);
     auto result = std::make_shared<StoragePostgreSQL>(
         StorageID(getDatabaseName(), table_name),
         connection_pool,
@@ -33,10 +38,39 @@ StoragePtr TableFunctionPostgreSQL::executeImpl(const ASTPtr & /*ast_function*/,
         ConstraintsDescription{},
         String{},
         configuration->schema,
-        configuration->on_conflict);
+        configuration->on_conflict,
+        configuration->query);
 
     result->startup();
     return result;
+}
+
+ColumnsDescription TableFunctionPostgreSQL::getTableSchemaFromConnectorX() const
+{
+    std::string conn = "postgresql://postgres:postgres@10.155.96.80:5432/tpch";
+    std::vector<const char*> queries;
+    queries.push_back(configuration->query.c_str());
+
+    auto cx_queries = CXSlice<const char*> {&queries[0], queries.size(), queries.capacity()};
+    
+    CXIterator *iter = connectorx_scan_iter(conn.c_str(), &cx_queries, 32768);
+    CXSchema *schema = connectorx_get_schema(iter);
+
+    std::vector<std::shared_ptr<arrow::Field>> fields;
+    for (size_t c = 0; c < schema->types.len; ++c) {
+        auto type_result = arrow::ImportType(schema->types.ptr[c].schema);
+        REQUIRE_RESULT(auto type, type_result);
+        auto field_name = std::string(schema->headers.ptr[c]);
+        fields.push_back(arrow::field(field_name, type));
+    }
+    std::shared_ptr<arrow::Schema> arrow_schema = arrow::schema(fields);
+    Block header = ArrowColumnToCHColumn::arrowSchemaToCHHeader(*arrow_schema, "arrow");
+    LOG_DEBUG(&Poco::Logger::get("TableFunctionPostgreSQL"), "header: {}", header.dumpNames());
+
+    free_schema(schema);
+    free_iter(iter);
+
+    return ColumnsDescription{header.getNamesAndTypesList()};
 }
 
 
