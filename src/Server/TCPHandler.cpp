@@ -60,6 +60,7 @@
 #include "TCPHandler.h"
 
 #include "config_version.h"
+#include "connectorx_lib.hpp"
 
 using namespace std::literals;
 using namespace DB;
@@ -1608,6 +1609,33 @@ void TCPHandler::receiveQuery()
         std::chrono::milliseconds ms(sleep_after_receiving_query.totalMilliseconds());
         std::this_thread::sleep_for(ms);
     }
+
+    LOG_DEBUG(&Poco::Logger::get("TCPHandler"), "original query: {}", state.query);
+    std::vector<CXConnectionInfo> conn_vec;
+    conn_vec.push_back(CXConnectionInfo{"pg", "postgresql://postgres:postgres@10.155.96.80:5432/tpch", {}, false});
+    auto conn_list = CXSlice<CXConnectionInfo>{&conn_vec[0], conn_vec.size(), conn_vec.capacity()};
+    CXSlice<CXFederatedPlan> res = connectorx_rewrite(&conn_list, state.query.c_str());
+
+    for (size_t i = 0; i < res.len; ++i) {
+        auto db_name = std::string(res.ptr[i].db_name);
+        auto db_alias = std::string(res.ptr[i].db_alias);
+        auto sql = std::string(res.ptr[i].sql);
+
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "{}({}): {}", db_name, db_alias, sql);
+
+        // if (db_name.compare("LOCAL") != 0) {
+        //     // Create view for external sqls
+        //     assert(fed_info->conns.find(db_name) != fed_info->conns.end());
+        //     fprintf(stderr, "create view %s:\n%s\n%s\n", db_alias.c_str(), fed_info->conns[db_name].c_str(), sql.c_str());
+        //     // connection.TableFunction("cx_scan", {Value(fed_info->conns[db_name]), Value(sql), Value::UBIGINT(0), Value::UBIGINT(0)})->CreateView(db_alias, true, true);
+        //     connection.TableFunction("cx_scan", {Value(fed_info->conns[db_name]), Value(sql), Value::UBIGINT(0), Value::UBIGINT(res.ptr[i].cardinality)})->CreateView(db_alias, true, true);
+        // } else {
+        //     // Use LOCAL sql as rewritten result
+        //     rewritten_query = sql;
+        // }
+    }
+    state.query = "SELECT * FROM postgresql('10.155.96.80:5432', 'tpch', 'nation', 'postgres', 'postgres', 'public', 'on_conflict', 'select * from nation, region where n_regionkey = r_regionkey and r_regionkey= 1')";
+    LOG_DEBUG(&Poco::Logger::get("TCPHandler"), "rewritten query: {}", state.query);
 }
 
 void TCPHandler::receiveUnexpectedQuery()

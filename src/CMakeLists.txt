@@ -534,6 +534,7 @@ endif()
 
 if (TARGET ch_contrib::connectorx)
     message(STATUS "linking ch_contrib::connectorx")
+    dbms_target_link_libraries(PUBLIC ch_contrib::jvm)
     dbms_target_include_directories(PRIVATE $<TARGET_PROPERTY:ch_contrib::connectorx,INTERFACE_INCLUDE_DIRECTORIES>)
     dbms_target_link_libraries(PUBLIC ch_contrib::connectorx)
 endif()
