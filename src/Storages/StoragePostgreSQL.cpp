@@ -37,6 +37,7 @@
 #include <Processors/Sinks/SinkToStorage.h>
 
 #include <QueryPipeline/Pipe.h>
+#include <QueryPipeline/narrowPipe.h>
 
 #include <Storages/StorageFactory.h>
 #include <Storages/transformQueryForExternalDatabase.h>
@@ -86,7 +87,7 @@ Pipe StoragePostgreSQL::read(
     ContextPtr context_,
     QueryProcessingStage::Enum /*processed_stage*/,
     size_t max_block_size_,
-    size_t /*num_streams*/)
+    size_t num_streams)
 {
     storage_snapshot->check(column_names_);
 
@@ -107,7 +108,30 @@ Pipe StoragePostgreSQL::read(
         sample_block.insert({ column_data.type, column_data.name });
     }
 
-    return Pipe(std::make_shared<PostgreSQLSource<>>(pool->get(), query, sample_block, max_block_size_));
+    Pipes pipes;
+
+    size_t last_pos = 0;
+    while (true) {
+        size_t pos = query.find(';', last_pos);
+        std::string sql = query.substr(last_pos, pos-last_pos);
+        if (sql.empty()) {
+            break;
+        }
+        
+        pipes.emplace_back(std::make_shared<PostgreSQLSource<>>(pool->get(), sql, sample_block, max_block_size_));
+
+        if (pos == std::string::npos) {
+            break;
+        }
+        last_pos = pos+1;
+    }
+
+    auto pipe = Pipe::unitePipes(std::move(pipes));
+
+    narrowPipe(pipe, num_streams);
+    return pipe;
+
+    // return Pipe(std::make_shared<PostgreSQLSource<>>(pool->get(), query, sample_block, max_block_size_));
 }
 
 

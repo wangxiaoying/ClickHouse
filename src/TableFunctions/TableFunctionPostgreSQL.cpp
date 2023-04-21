@@ -49,7 +49,23 @@ ColumnsDescription TableFunctionPostgreSQL::getTableSchemaFromConnectorX() const
 {
     std::string conn = "postgresql://postgres:postgres@10.155.96.80:5432/tpch";
     std::vector<const char*> queries;
-    queries.push_back(configuration->query.c_str());
+    std::vector<std::string> tmp;
+
+    size_t last_pos = 0;
+    while (true) {
+        size_t pos = configuration->query.find(';', last_pos);
+        std::string sql = configuration->query.substr(last_pos, pos-last_pos);
+        if (sql.empty()) {
+            break;
+        }
+        // fprintf(stderr, "SQL: %s\n", sql.c_str());
+        tmp.push_back(sql);
+        queries.push_back(tmp.back().c_str()); 
+        if (pos == std::string::npos) {
+            break;
+        }
+        last_pos = pos+1;
+    }
 
     auto cx_queries = CXSlice<const char*> {&queries[0], queries.size(), queries.capacity()};
     
