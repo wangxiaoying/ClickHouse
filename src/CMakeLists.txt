@@ -532,6 +532,13 @@ if (TARGET ch_contrib::libpqxx)
     dbms_target_link_libraries(PUBLIC ch_contrib::libpqxx)
 endif()
 
+if (TARGET ch_contrib::cxtest)
+    message(STATUS "linking ch_contrib::cxtest")
+    dbms_target_link_libraries(PUBLIC ch_contrib::jvm)
+    dbms_target_include_directories(PRIVATE $<TARGET_PROPERTY:ch_contrib::cxtest,INTERFACE_INCLUDE_DIRECTORIES>)
+    dbms_target_link_libraries(PUBLIC ch_contrib::cxtest)
+endif()
+
 if (TARGET ch_contrib::datasketches)
     target_link_libraries (clickhouse_aggregate_functions PRIVATE ch_contrib::datasketches)
 endif ()

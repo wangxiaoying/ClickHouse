@@ -60,6 +60,7 @@
 #include "TCPHandler.h"
 
 #include "config_version.h"
+#include "j4rstest.hpp"
 
 using namespace std::literals;
 using namespace DB;
@@ -1608,6 +1609,9 @@ void TCPHandler::receiveQuery()
         std::chrono::milliseconds ms(sleep_after_receiving_query.totalMilliseconds());
         std::this_thread::sleep_for(ms);
     }
+    LOG_DEBUG(&Poco::Logger::get("TCPHandler"), "original query: {}", state.query);
+    j4rs_test();
+    LOG_DEBUG(&Poco::Logger::get("TCPHandler"), "j4rs test success!");
 }
 
 void TCPHandler::receiveUnexpectedQuery()
